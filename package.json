@@ -16,8 +16,6 @@
   ],
   "license": "ISC",
   "dependencies": {
-    "debug": "^4.4.3",
-    "localtunnel": "^2.0.2",
     "ws": "^8.21.0"
   }
 }

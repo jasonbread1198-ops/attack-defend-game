@@ -2,10 +2,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import cp from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import localtunnel from 'localtunnel';
 import { MSG, validate } from './protocol.mjs';
 import { Game, aiDecide } from './game.mjs';
 
@@ -398,89 +396,14 @@ function getLocalIPs() {
   return ips;
 }
 
-// ── 外网隧道（可选，支持自动重连）──
+// ── 外网隧道（可选）──
+// 如需外网对战，手动运行 ngrok 或其他隧道工具将端口暴露到公网
+// 例如：ngrok http 3005
+// 服务器本身仅提供局域网访问
 let tunnelUrl = null;
-let tunnelInstance = null;
-let tunnelReconnectTimer = null;
-
-async function createTunnel(port) {
-  // 方案一：尝试 localtunnel
-  try {
-    const tunnel = await localtunnel({ port });
-    console.log(`  🌐 外网地址 (localtunnel):  ${tunnel.url}`);
-    console.log('     首次访问需输入公网 IP 验证');
-    tunnelInstance = tunnel;
-    tunnelUrl = tunnel.url;
-
-    tunnel.on('close', () => {
-      console.log('  ⚠️  外网隧道已断开，10秒后自动重连...');
-      tunnelUrl = null;
-      tunnelInstance = null;
-      scheduleTunnelReconnect(port);
-    });
-
-    tunnel.on('error', (err) => {
-      console.log(`  ⚠️  隧道错误: ${err.message}`);
-    });
-
-    return true;
-  } catch (e) {
-    console.log(`  ⚠️  localtunnel 不可用: ${e.message}`);
-    return false;
-  }
-}
-
-function scheduleTunnelReconnect(port) {
-  if (tunnelReconnectTimer) return;
-  tunnelReconnectTimer = setTimeout(async () => {
-    tunnelReconnectTimer = null;
-    console.log('  🔄 正在重连外网隧道...');
-    await createTunnel(port);
-    if (!tunnelUrl) {
-      // 尝试 ngrok 回退
-      await tryNgrok(port);
-    }
-  }, 10000);
-}
-
-async function tryNgrok(port) {
-  try {
-    cp.spawn('ngrok', ['http', String(port)], { stdio: 'ignore', detached: true, shell: true });
-    const ngrokUrl = await new Promise((resolve, reject) => {
-      const start = Date.now();
-      const poll = () => {
-        if (Date.now() - start > 8000) return reject(new Error('timeout'));
-        const api = http.get('http://127.0.0.1:4040/api/tunnels', (res) => {
-          let body = '';
-          res.on('data', (c) => body += c);
-          res.on('end', () => {
-            try {
-              const tunnels = JSON.parse(body).tunnels;
-              const url = tunnels?.find(t => t.proto === 'https')?.public_url;
-              if (url) resolve(url);
-              else setTimeout(poll, 500);
-            } catch { setTimeout(poll, 500); }
-          });
-        });
-        api.on('error', () => setTimeout(poll, 500));
-      };
-      setTimeout(poll, 3000);
-    });
-    tunnelUrl = ngrokUrl;
-    console.log(`  🌐 外网地址 (ngrok):     ${ngrokUrl}`);
-  } catch (e) {
-    console.log('  ⚠️  ngrok 未检测到，仅局域网模式');
-    console.log('     如需外网对战，请手动运行: ngrok http ' + port);
-  }
-}
-
-async function startTunnel(port) {
-  const ok = await createTunnel(port);
-  if (!ok) await tryNgrok(port);
-}
 
 export function start() {
-  server.listen(PORT, '0.0.0.0', async () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log('═'.repeat(50));
     console.log('  ⚡ 攻守游戏 · 联网对战服务器');
     console.log('═'.repeat(50));
@@ -498,10 +421,8 @@ export function start() {
     }
 
     console.log('\n  房间码为 4 位数字，告诉朋友即可加入');
+    console.log('\n  🌐 外网对战：手动运行 ngrok http ' + PORT + ' 或 natapp 等隧道工具');
     console.log('═'.repeat(50));
-
-    // 启动外网隧道
-    await startTunnel(PORT);
   });
 }
 
