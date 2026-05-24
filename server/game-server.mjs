@@ -398,23 +398,52 @@ function getLocalIPs() {
   return ips;
 }
 
-// ── 外网隧道（可选）──
+// ── 外网隧道（可选，支持自动重连）──
 let tunnelUrl = null;
+let tunnelInstance = null;
+let tunnelReconnectTimer = null;
 
-async function startTunnel(port) {
+async function createTunnel(port) {
   // 方案一：尝试 localtunnel
   try {
     const tunnel = await localtunnel({ port });
-    tunnelUrl = tunnel.url;
-    console.log(`\n  🌐 外网地址 (localtunnel):  ${tunnelUrl}`);
+    console.log(`  🌐 外网地址 (localtunnel):  ${tunnel.url}`);
     console.log('     首次访问需输入公网 IP 验证');
-    tunnel.on('close', () => { tunnelUrl = null; });
-    return;
+    tunnelInstance = tunnel;
+    tunnelUrl = tunnel.url;
+
+    tunnel.on('close', () => {
+      console.log('  ⚠️  外网隧道已断开，10秒后自动重连...');
+      tunnelUrl = null;
+      tunnelInstance = null;
+      scheduleTunnelReconnect(port);
+    });
+
+    tunnel.on('error', (err) => {
+      console.log(`  ⚠️  隧道错误: ${err.message}`);
+    });
+
+    return true;
   } catch (e) {
     console.log(`  ⚠️  localtunnel 不可用: ${e.message}`);
+    return false;
   }
+}
 
-  // 方案二：尝试 ngrok 独立二进制
+function scheduleTunnelReconnect(port) {
+  if (tunnelReconnectTimer) return;
+  tunnelReconnectTimer = setTimeout(async () => {
+    tunnelReconnectTimer = null;
+    console.log('  🔄 正在重连外网隧道...');
+    await createTunnel(port);
+    if (!tunnelUrl) {
+      // 尝试 ngrok 回退
+      await tryNgrok(port);
+    }
+  }, 10000);
+}
+
+async function tryNgrok(port) {
   try {
     cp.spawn('ngrok', ['http', String(port)], { stdio: 'ignore', detached: true, shell: true });
     const ngrokUrl = await new Promise((resolve, reject) => {
@@ -440,9 +469,14 @@ async function startTunnel(port) {
     tunnelUrl = ngrokUrl;
     console.log(`  🌐 外网地址 (ngrok):     ${ngrokUrl}`);
   } catch (e) {
-    console.log(`  ⚠️  ngrok 未检测到，仅局域网模式`);
+    console.log('  ⚠️  ngrok 未检测到，仅局域网模式');
     console.log('     如需外网对战，请手动运行: ngrok http ' + port);
   }
+}
+
+async function startTunnel(port) {
+  const ok = await createTunnel(port);
+  if (!ok) await tryNgrok(port);
 }
 
 export function start() {
