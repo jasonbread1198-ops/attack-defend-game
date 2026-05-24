@@ -2,8 +2,10 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import cp from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import localtunnel from 'localtunnel';
 import { MSG, validate } from './protocol.mjs';
 import { Game, aiDecide } from './game.mjs';
 
@@ -215,16 +217,19 @@ function resolveAndBroadcast(room) {
 
 function buildHistoryEntry(roundNum, players, events) {
   const actions = players.map(p => {
-    if (!p.action) return `${p.name}: 无`;
+    if (!p.action) return { name: p.name, type: 'none', icon: '—', desc: '未行动' };
     if (p.action.type === 'shoot') {
       const targets = (p.action.targets || []).map(tid => {
         const t = players.find(pl => pl.id === tid);
         return t ? t.name : tid;
       }).join(',');
-      return `${p.name}: 🔫→${targets}`;
+      return { name: p.name, type: 'shoot', icon: '🔫', desc: `→ ${targets}` };
     }
-    return `${p.name}: ${p.action.type === 'shield' ? '🛡️' : '📦装弹'}`;
-  }).join(' · ');
+    if (p.action.type === 'shield') {
+      return { name: p.name, type: 'shield', icon: '🛡️', desc: '举盾' };
+    }
+    return { name: p.name, type: 'reload', icon: '📦', desc: '装弹' };
+  });
 
   const seen = new Set();
   const resultLines = [];
@@ -312,6 +317,12 @@ function checkAllReady(room) {
 
 // ── HTTP Server ──
 const server = http.createServer((req, res) => {
+  // API: 获取服务器信息（包含外网地址）
+  if (req.url === '/api/info') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    return res.end(JSON.stringify({ tunnelUrl, lanIPs: getLocalIPs(), port: PORT }));
+  }
+
   let filePath = path.join(PUBLIC, req.url === '/' ? 'index.html' : req.url);
   filePath = path.normalize(filePath);
   if (!filePath.startsWith(PUBLIC)) {
@@ -387,12 +398,55 @@ function getLocalIPs() {
   return ips;
 }
 
-// 为 next_round 添加处理 — 重新组织消息路由
-// 简化：直接重写整个 message handler 合并 next_round
-// 实际做法：在原始 message handler 末尾添加 next_round case
+// ── 外网隧道（可选）──
+let tunnelUrl = null;
+
+async function startTunnel(port) {
+  // 方案一：尝试 localtunnel
+  try {
+    const tunnel = await localtunnel({ port });
+    tunnelUrl = tunnel.url;
+    console.log(`\n  🌐 外网地址 (localtunnel):  ${tunnelUrl}`);
+    console.log('     首次访问需输入公网 IP 验证');
+    tunnel.on('close', () => { tunnelUrl = null; });
+    return;
+  } catch (e) {
+    console.log(`  ⚠️  localtunnel 不可用: ${e.message}`);
+  }
+
+  // 方案二：尝试 ngrok 独立二进制
+  try {
+    cp.spawn('ngrok', ['http', String(port)], { stdio: 'ignore', detached: true, shell: true });
+    const ngrokUrl = await new Promise((resolve, reject) => {
+      const start = Date.now();
+      const poll = () => {
+        if (Date.now() - start > 8000) return reject(new Error('timeout'));
+        const api = http.get('http://127.0.0.1:4040/api/tunnels', (res) => {
+          let body = '';
+          res.on('data', (c) => body += c);
+          res.on('end', () => {
+            try {
+              const tunnels = JSON.parse(body).tunnels;
+              const url = tunnels?.find(t => t.proto === 'https')?.public_url;
+              if (url) resolve(url);
+              else setTimeout(poll, 500);
+            } catch { setTimeout(poll, 500); }
+          });
+        });
+        api.on('error', () => setTimeout(poll, 500));
+      };
+      setTimeout(poll, 3000);
+    });
+    tunnelUrl = ngrokUrl;
+    console.log(`  🌐 外网地址 (ngrok):     ${ngrokUrl}`);
+  } catch (e) {
+    console.log(`  ⚠️  ngrok 未检测到，仅局域网模式`);
+    console.log('     如需外网对战，请手动运行: ngrok http ' + port);
+  }
+}
 
 export function start() {
-  server.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', async () => {
     console.log('═'.repeat(50));
     console.log('  ⚡ 攻守游戏 · 联网对战服务器');
     console.log('═'.repeat(50));
@@ -401,7 +455,7 @@ export function start() {
     console.log(`\n  本地访问:  http://localhost:${PORT}`);
 
     if (ips.length > 0) {
-      console.log('\n  📱 手机端访问 (同 WiFi 下):');
+      console.log('\n  📱 局域网访问 (同 WiFi):');
       for (const ip of ips) {
         console.log(`     http://${ip}:${PORT}`);
       }
@@ -411,6 +465,9 @@ export function start() {
 
     console.log('\n  房间码为 4 位数字，告诉朋友即可加入');
     console.log('═'.repeat(50));
+
+    // 启动外网隧道
+    await startTunnel(PORT);
   });
 }
 

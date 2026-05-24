@@ -216,17 +216,24 @@ html,body{height:100%;background:var(--bg-deepest);color:var(--text-primary);fon
 .btn-back:hover{color:var(--text-primary);border-color:var(--border-active)}
 
 /* History Panel */
-.history-panel{width:240px;flex-shrink:0;background:var(--bg-panel);border:1px solid var(--border-glow);border-radius:var(--radius-lg);padding:16px 14px;backdrop-filter:blur(12px);box-shadow:0 2px 12px rgba(0,0,0,0.06);max-height:70vh;overflow-y:auto;position:sticky;top:12px}
+.history-panel{width:260px;flex-shrink:0;background:var(--bg-panel);border:1px solid var(--border-glow);border-radius:var(--radius-lg);padding:16px 12px;backdrop-filter:blur(12px);box-shadow:0 2px 12px rgba(0,0,0,0.06);max-height:70vh;overflow-y:auto;position:sticky;top:12px}
 .history-panel::-webkit-scrollbar{width:4px}
 .history-panel::-webkit-scrollbar-track{background:transparent}
 .history-panel::-webkit-scrollbar-thumb{background:var(--border-glow);border-radius:2px}
 .history-title{font-size:.9rem;font-weight:800;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border-glow)}
 .history-empty{color:var(--text-muted);font-size:.85rem;font-style:italic;text-align:center;padding:20px 0}
-.history-entry{padding:10px 0;border-bottom:1px solid var(--border-glow);font-size:.85rem;animation:fadeSlide .25s ease-out both}
-.history-entry:last-child{border-bottom:none}
-.history-entry .h-round{font-weight:800;font-size:.88rem;color:var(--neon-gold);margin-bottom:4px;text-shadow:0 0 4px var(--neon-gold-glow)}
-.history-entry .h-actions{color:var(--text-secondary);line-height:1.6;font-size:.82rem}
-.history-entry .h-result{color:var(--neon-crimson);font-size:.8rem;margin-top:3px;line-height:1.6}
+.history-entry{margin-bottom:10px;padding:12px 14px;background:rgba(0,0,0,0.02);border:1px solid var(--border-glow);border-radius:var(--radius);font-size:.85rem;animation:fadeSlide .25s ease-out both;position:relative}
+.history-entry:last-child{margin-bottom:0}
+.history-entry .h-round{font-weight:800;font-size:.9rem;color:var(--text-primary);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border-glow);display:flex;align-items:center;gap:6px;letter-spacing:.02em}
+	.history-entry .h-round::before{content:'';display:inline-block;width:4px;height:16px;background:linear-gradient(180deg,var(--neon-crimson),var(--neon-gold));border-radius:2px;flex-shrink:0}
+.history-entry .h-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+	.h-action-badge{display:inline-block;font-size:.76rem;font-weight:700;padding:3px 10px;border-radius:10px;letter-spacing:.02em;line-height:1.5}
+	.h-action-badge.shoot{color:#8b0000;background:rgba(196,16,40,0.1);border:1px solid rgba(196,16,40,0.2)}
+	.h-action-badge.shield{color:#004466;background:rgba(0,119,170,0.1);border:1px solid rgba(0,119,170,0.2)}
+	.h-action-badge.reload{color:#004d2e;background:rgba(0,138,80,0.1);border:1px solid rgba(0,138,80,0.2)}
+	.h-action-badge.none{color:var(--text-muted);background:rgba(0,0,0,0.04);border:1px solid var(--border-glow)}
+.history-entry .h-result{font-size:.78rem;margin-top:6px;line-height:1.65;color:var(--text-secondary)}
+	.history-entry .h-result b{color:var(--neon-crimson)}
 .history-entry .h-hp{color:var(--text-muted);font-size:.78rem;margin-top:4px;font-style:italic}
 @keyframes fadeSlide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
 
@@ -341,6 +348,9 @@ html,body{height:100%;background:var(--bg-deepest);color:var(--text-primary);fon
             </div>
           </div>
           <button id="btn-create-room" class="btn-primary">⚔️ 创建房间</button>
+          <div style="text-align:center;margin-top:10px;font-size:.78rem;">
+            服务器: <span id="ws-status" style="color:var(--neon-orange);">连接中...</span>
+          </div>
         </div>
         <div class="rules-card">
           <h2>📖 游戏规则</h2>

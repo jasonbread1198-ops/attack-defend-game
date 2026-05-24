@@ -531,12 +531,19 @@ function addHistoryEntry(history) {
   const entry = document.createElement('div');
   entry.className = 'history-entry';
 
-  const actions = history.actions || '';
+  const actions = history.actions || [];
   const resultLines = history.resultLines || [];
+
+  const actionsHTML = Array.isArray(actions)
+    ? actions.map(a => {
+        const typeClass = a.type || 'none';
+        return `<span class="h-action-badge ${typeClass}">${a.icon || ''} ${a.name}: ${a.desc || ''}</span>`;
+      }).join('')
+    : `<span class="h-action-badge none">${actions}</span>`;
 
   entry.innerHTML = `
     <div class="h-round">⚡ 第 ${history.round} 回合</div>
-    <div class="h-actions">${actions}</div>
+    <div class="h-actions">${actionsHTML}</div>
     ${resultLines.length ? `<div class="h-result">${resultLines.join('<br>')}</div>` : '<div class="h-result">\u{1F4A4} 无事发生</div>'}`;
   list.insertBefore(entry, list.firstChild);
 }
@@ -779,6 +786,10 @@ function initSetupScreen() {
 
   // 创建房间
   $('#btn-create-room').onclick = () => {
+    if (!wsConnected) {
+      showError('正在连接服务器，请稍候...');
+      return;
+    }
     const nameInput = $('#setup-player-name');
     myName = nameInput.value.trim() || `玩家${Math.floor(Math.random() * 100)}`;
     ws.send(MSG.CREATE_ROOM, {
@@ -791,6 +802,10 @@ function initSetupScreen() {
 
   // 加入房间
   $('#btn-join-room').onclick = () => {
+    if (!wsConnected) {
+      showError('正在连接服务器，请稍候...');
+      return;
+    }
     const nameInput = $('#setup-player-name');
     const codeInput = $('#room-code-input');
     myName = nameInput.value.trim() || `玩家${Math.floor(Math.random() * 100)}`;
@@ -907,13 +922,41 @@ function showFinalScreen(ranking) {
 }
 
 // ── WebSocket 消息处理 ──
+let wsConnected = false;
+
+function updateConnectionUI() {
+  const statusEl = $('#ws-status');
+  const btnCreate = $('#btn-create-room');
+  const btnJoin = $('#btn-join-room');
+  if (statusEl) {
+    if (wsConnected) {
+      statusEl.textContent = '已连接';
+      statusEl.style.color = 'var(--neon-green)';
+    } else {
+      statusEl.textContent = '连接中...';
+      statusEl.style.color = 'var(--neon-orange)';
+    }
+  }
+  if (btnCreate) btnCreate.disabled = !wsConnected;
+  if (btnJoin) btnJoin.disabled = !wsConnected;
+}
+
 function setupWSHandlers() {
   ws.on('open', () => {
+    wsConnected = true;
+    updateConnectionUI();
     console.log('WebSocket connected');
   });
 
   ws.on('close', () => {
+    wsConnected = false;
+    updateConnectionUI();
     console.log('WebSocket disconnected, reconnecting...');
+  });
+
+  ws.on('error', () => {
+    wsConnected = false;
+    updateConnectionUI();
   });
 
   ws.on(MSG.ERROR, (payload) => {

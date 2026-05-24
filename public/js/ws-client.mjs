@@ -68,7 +68,9 @@ export class WSClient {
   send(type, payload = {}) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type, payload }));
+      return true;
     }
+    return false;
   }
 
   disconnect() {
