@@ -18,6 +18,24 @@ let myAmmo = 1;
 let myHp = 0;
 let submittedAction = false;
 let roundResultReceived = false;
+let publicTunnelUrl = null;
+
+// 获取公网隧道地址
+async function fetchPublicURL() {
+  try {
+    const res = await fetch('/api/info');
+    const info = await res.json();
+    if (info.tunnelUrl) {
+      publicTunnelUrl = info.tunnelUrl;
+      const urlEl = $('#lobby-url-text');
+      const wrapEl = $('#lobby-public-url');
+      if (urlEl) urlEl.textContent = publicTunnelUrl;
+      if (wrapEl) wrapEl.style.display = 'block';
+    }
+  } catch (e) {
+    // 无外网地址，不显示
+  }
+}
 
 // ── 屏幕引用 ──
 const screenSetup = $('#screen-setup');
@@ -974,6 +992,7 @@ function setupWSHandlers() {
     $('#lobby-room-code').textContent = roomCode;
     updateLobbyPlayers(payload.players);
     $('#btn-start-game').classList.remove('hidden');
+    fetchPublicURL();
   });
 
   ws.on(MSG.ROOM_JOINED, (payload) => {
@@ -987,6 +1006,7 @@ function setupWSHandlers() {
     $('#lobby-room-code').textContent = roomCode;
     updateLobbyPlayers(payload.players);
     if (isHost) $('#btn-start-game').classList.remove('hidden');
+    fetchPublicURL();
     else $('#btn-start-game').classList.add('hidden');
   });
 
@@ -1139,6 +1159,16 @@ function init() {
   $('#btn-game-restart').onclick = () => {
     stopConfetti();
     ws.send(MSG.BACK_TO_LOBBY);
+  };
+
+  // 复制外网地址
+  $('#btn-copy-url').onclick = () => {
+    if (publicTunnelUrl) {
+      navigator.clipboard.writeText(publicTunnelUrl).then(() => {
+        const btn = $('#btn-copy-url');
+        if (btn) { btn.textContent = '已复制!'; setTimeout(() => { btn.textContent = '复制'; }, 2000); }
+      }).catch(() => { /* 降级 */ });
+    }
   };
 
   // 连接 WebSocket
