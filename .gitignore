@@ -1,0 +1,10 @@
+node_modules/
+.env
+*.log
+.DS_Store
+Thumbs.db
+*.docx
+~$*.docx
+generate-rules.mjs
+public/app.js
+public/style.css

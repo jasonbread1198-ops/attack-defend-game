@@ -1,0 +1,17 @@
+{
+  "name": "attack-defend-game",
+  "version": "3.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "description": "攻守游戏 - 联网对战（枪盾装弹）",
+  "keywords": ["game", "multiplayer", "websocket"],
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.21.0"
+  }
+}
