@@ -138,7 +138,7 @@ async function animateBullet(fromIdx, toIdx, blocked) {
 
   const dx = to.x - from.x, dy = to.y - from.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  const duration = Math.max(300, Math.min(550, dist / 1.5));
+  const duration = Math.max(500, Math.min(900, dist / 1.0));
   const start = performance.now();
   flashScreen();
 
@@ -288,11 +288,11 @@ async function animateActionReveal(players) {
           flashAmmoIncrease(i);
         }
         resolve();
-      }, i * 120);
+      }, i * 200);
     }));
   }
   await Promise.all(promises);
-  await sleep(300);
+  await sleep(500);
 }
 
 // ── 卡牌渲染 ──
@@ -531,11 +531,11 @@ async function animateCombat(events, players) {
     }
 
     updateAllCards(players);
-    await sleep(120);
+    await sleep(250);
   }
 
   updateAllCards(players);
-  await sleep(200);
+  await sleep(500);
   combatLayer.innerHTML = '';
   combatLayer.classList.add('hidden');
 }
@@ -665,6 +665,61 @@ function showSelection(playerState, opponents) {
     $('#select-hp').textContent = `❤️ HP ${Math.max(0, playerState.hp)}/${totalRounds}`;
     $('#select-ammo').textContent = `\u{1F52B} 弹药 ×${playerState.ammo}`;
     $('#select-score').textContent = `⚔️ 伤害 ${playerState.score}`;
+
+    const historySection = $('#opponent-history-section');
+    const historyList = $('#opponent-history-list');
+    const toggleBtn = $('#btn-toggle-history');
+    const hasHistory = opponents.some(o => o.actionHistory && o.actionHistory.length > 0);
+
+    if (hasHistory) {
+      historySection.classList.remove('hidden');
+      historyList.classList.add('hidden');
+      toggleBtn.classList.remove('open');
+      toggleBtn.textContent = '📜 查看对手历史 ▼';
+
+      let historyHTML = '';
+      for (const opp of opponents) {
+        const history = opp.actionHistory || [];
+        if (history.length === 0) continue;
+        historyHTML += `<div class="opp-history-card">
+          <div class="opp-history-name">${opp.name} <span class="oh-hp">❤️${Math.max(0, opp.hp)}</span></div>
+          <div class="opp-history-rounds">`;
+        for (let i = 0; i < history.length; i++) {
+          const a = history[i];
+          let icon = '—', desc = '未行动', cls = 'none';
+          if (a.type === 'shoot') {
+            icon = '🔫'; cls = 'shoot';
+            const targetNames = (a.targets || []).map(tid => {
+              const tp = gamePlayers.find(p => p.id === tid);
+              return tp ? tp.name : tid;
+            }).join(',');
+            desc = targetNames || '射击';
+          } else if (a.type === 'shield') {
+            icon = '🛡️'; desc = '举盾'; cls = 'shield';
+          } else if (a.type === 'reload') {
+            icon = '📦'; desc = '装弹'; cls = 'reload';
+          }
+          historyHTML += `<span class="oh-round-badge ${cls}"><span class="oh-round-num">R${i + 1}</span> ${icon} ${desc}</span>`;
+        }
+        historyHTML += '</div></div>';
+      }
+      historyList.innerHTML = historyHTML;
+
+      toggleBtn.onclick = () => {
+        const isOpen = !historyList.classList.contains('hidden');
+        if (isOpen) {
+          historyList.classList.add('hidden');
+          toggleBtn.textContent = '📜 查看对手历史 ▼';
+          toggleBtn.classList.remove('open');
+        } else {
+          historyList.classList.remove('hidden');
+          toggleBtn.textContent = '📜 查看对手历史 ▲';
+          toggleBtn.classList.add('open');
+        }
+      };
+    } else {
+      historySection.classList.add('hidden');
+    }
 
     const canShoot = playerState.ammo > 0 && opponents.length > 0;
     btnShoot.disabled = !canShoot;
@@ -1102,14 +1157,14 @@ function setupWSHandlers() {
 
     // 显示所有人的行动
     for (let i = 0; i < gamePlayers.length; i++) {
-      await sleep(60);
+      await sleep(120);
       updateCardAction(gamePlayers[i], i);
       highlightCard(i, gamePlayers[i].action);
     }
 
-    await sleep(300);
+    await sleep(500);
     await animateActionReveal(gamePlayers);
-    await sleep(200);
+    await sleep(400);
     flashScreen();
 
     // 播放战斗动画
@@ -1133,11 +1188,54 @@ function setupWSHandlers() {
     showFinalScreen(payload.ranking);
   });
 
+  ws.on(MSG.YOU_ELIMINATED, (payload) => {
+    showEliminationOverlay(payload);
+  });
+
   ws.on(MSG.ROOM_CLOSED, (payload) => {
     showScreen(screenSetup);
     showError(payload.reason || '房间已关闭');
     ws.disconnect();
   });
+}
+
+function showEliminationOverlay(payload) {
+  const existing = $('#elimination-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'elimination-overlay';
+  overlay.className = 'overlay';
+  overlay.style.zIndex = '250';
+
+  const rankEmoji = payload.myRank === 1 ? '\u{1F947}' : payload.myRank === 2 ? '\u{1F948}' : payload.myRank === 3 ? '\u{1F949}' : `#${payload.myRank}`;
+
+  let rankingHTML = '';
+  for (const r of payload.ranking) {
+    const medal = r.rank === 1 ? '\u{1F947}' : r.rank === 2 ? '\u{1F948}' : r.rank === 3 ? '\u{1F949}' : r.rank;
+    const aliveBadge = r.isAlive ? '' : ' \u{1F480}';
+    rankingHTML += `<div class="elim-ranking-row"><span class="err-rank">${medal}</span><span class="err-name">${r.name}${aliveBadge}</span><span class="err-stat">❤️ ${Math.max(0, r.hp)} · ⚔️ ${r.score}</span></div>`;
+  }
+
+  overlay.innerHTML = `
+    <div class="elimination-card">
+      <div class="elim-header">\u{1F480} 你已阵亡</div>
+      <div class="elim-rank-badge">${rankEmoji} 当前排名第 ${payload.myRank} 名</div>
+      <div class="elim-round-info">第 ${payload.round}/${payload.totalRounds} 回合</div>
+      <div class="elim-ranking-title">\u{1F3C6} 真人玩家排名</div>
+      <div class="elim-ranking-list">${rankingHTML}</div>
+      <div class="elim-actions">
+        <button class="btn-primary" id="btn-spectate" style="background:linear-gradient(135deg,var(--neon-cyan),var(--neon-purple));box-shadow:0 0 16px var(--neon-cyan-glow)">\u{1F441}️ 观战</button>
+        <button class="btn-back" id="btn-leave-elim" style="margin-top:8px">🚪 返回大厅</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#btn-spectate').onclick = () => overlay.remove();
+  overlay.querySelector('#btn-leave-elim').onclick = () => {
+    overlay.remove();
+    ws.send(MSG.BACK_TO_LOBBY);
+  };
 }
 
 function updateRoundDisplay() {

@@ -21,6 +21,7 @@ export const MSG = {
   GAME_OVER: 'game_over',
   ERROR: 'error',
   ROOM_CLOSED: 'room_closed',
+  YOU_ELIMINATED: 'you_eliminated',
 };
 
 const SCHEMAS = {

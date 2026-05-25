@@ -207,6 +207,37 @@ function resolveAndBroadcast(room) {
     history: historyEntry,
   });
 
+  // 刚阵亡的真人玩家 → 发送个人结算
+  const eliminatedIds = events.filter(e => e.type === 'eliminated').map(e => e.player);
+  if (!room._eliminatedNotified) room._eliminatedNotified = new Set();
+  for (const eid of eliminatedIds) {
+    if (room._eliminatedNotified.has(eid)) continue;
+    const gp = game.players.find(p => p.id === eid);
+    if (!gp || gp.isAI) continue;
+    const rp = room.playerMap.get(eid);
+    if (rp && rp.ws) {
+      const humanRanking = game.getRanking()
+        .filter(p => !p.isAI)
+        .map((p, i) => ({
+          rank: i + 1,
+          id: p.id,
+          name: p.name,
+          hp: p.hp,
+          score: p.score,
+          isAlive: p.hp > 0,
+          shotsFired: p.shotsFired,
+        }));
+      const myRank = humanRanking.find(r => r.id === eid);
+      sendTo(rp.ws, MSG.YOU_ELIMINATED, {
+        myRank: myRank ? myRank.rank : humanRanking.length,
+        ranking: humanRanking,
+        round: game.round,
+        totalRounds: game.totalRounds,
+      });
+      room._eliminatedNotified.add(eid);
+    }
+  }
+
   // 清除
   room.actionBuffer.clear();
   room.actionsSubmitted = 0;
@@ -365,7 +396,12 @@ function startNewRound(room) {
       if (rp && rp.ws && rp.ws.readyState === 1) {
         const aliveOpponents = game.alivePlayers
           .filter(op => op.id !== p.id)
-          .map(op => ({ id: op.id, name: op.name, hp: op.hp }));
+          .map(op => ({
+            id: op.id,
+            name: op.name,
+            hp: op.hp,
+            actionHistory: op.actionHistory.map(a => a ? { type: a.type, targets: a.targets || [] } : { type: 'none' }),
+          }));
         sendTo(rp.ws, MSG.YOUR_TURN, {
           playerState: game.getStateSnapshot().find(s => s.id === p.id),
           aliveOpponents,
