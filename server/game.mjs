@@ -1,4 +1,4 @@
-// 服务端权威 Game 类 — 从 index.html 移植
+// 服务端权威 Game 类
 
 export class Game {
   constructor(names, humanCount, rounds) {
@@ -157,7 +157,7 @@ export class Game {
   }
 }
 
-// AI 决策 — 从 index.html 移植
+// AI 决策
 export function aiDecide(player, game) {
   const round = game.round + 1;
   const others = game.players.filter(p => p.id !== player.id && p.hp > 0);

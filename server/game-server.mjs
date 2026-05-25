@@ -33,7 +33,7 @@ function genRoomCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
-function createRoom(ws, { playerName, totalRounds, maxPlayers, humanCount }) {
+function createRoom(ws, { playerName, totalRounds, maxPlayers }) {
   const code = genRoomCode();
   const playerId = 'p0';
   const player = { id: playerId, name: playerName, ws, isHost: true, isAI: false, connected: true };
@@ -42,7 +42,7 @@ function createRoom(ws, { playerName, totalRounds, maxPlayers, humanCount }) {
     code,
     host: ws,
     players: [player],
-    settings: { totalRounds: Math.min(20, Math.max(3, totalRounds)), maxPlayers: Math.min(6, Math.max(2, maxPlayers)), humanCount: Math.min(maxPlayers, Math.max(1, humanCount)) },
+    settings: { totalRounds: Math.min(20, Math.max(3, totalRounds)), maxPlayers: Math.min(6, Math.max(2, maxPlayers)) },
     state: 'waiting', // waiting | playing | finished
     game: null,
     actionBuffer: new Map(),
@@ -74,7 +74,7 @@ function joinRoom(ws, { roomCode, playerName }) {
 function startGame(room) {
   if (room.state !== 'waiting') return { error: '游戏已开始' };
 
-  const { totalRounds, maxPlayers, humanCount } = room.settings;
+  const { totalRounds, maxPlayers } = room.settings;
 
   // 确保所有真人玩家已连接
   const humanPlayers = room.players.filter(p => !p.isAI);
@@ -95,7 +95,7 @@ function startGame(room) {
 
   // 匹配 player id
   const realPlayers = [...room.players];
-  room.game = new Game(names, humanCount, totalRounds);
+  room.game = new Game(names, realPlayers.length, totalRounds);
 
   // 将服务端玩家对象与 Game 玩家对象关联
   for (let i = 0; i < room.game.players.length; i++) {
@@ -440,7 +440,7 @@ wss.on('connection', (ws) => {
 
     switch (type) {
 
-      case 'next_round': {
+      case MSG.NEXT_ROUND: {
         const room = [...rooms.values()].find(r => r.host === ws);
         if (!room || room.state !== 'playing') return;
         startNewRound(room);

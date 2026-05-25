@@ -7,6 +7,7 @@ export const MSG = {
   LEAVE_ROOM: 'leave_room',
   BACK_TO_LOBBY: 'back_to_lobby',
   REQUEST_STATE: 'request_state',
+  NEXT_ROUND: 'next_round',
 
   ROOM_CREATED: 'room_created',
   ROOM_JOINED: 'room_joined',
@@ -23,7 +24,7 @@ export const MSG = {
 };
 
 const SCHEMAS = {
-  [MSG.CREATE_ROOM]: { playerName: 'string', totalRounds: 'number', maxPlayers: 'number', humanCount: 'number' },
+  [MSG.CREATE_ROOM]: { playerName: 'string', totalRounds: 'number', maxPlayers: 'number' },
   [MSG.JOIN_ROOM]: { roomCode: 'string', playerName: 'string' },
   [MSG.START_GAME]: {},
   [MSG.PLAYER_ACTION]: { type: 'string' },

@@ -770,69 +770,88 @@ function hideWaitingOverlay() {
 
 // ── 设置屏幕 ──
 function initSetupScreen() {
+  const modeSelect = $('#mode-select');
+  const setupForm = $('#setup-form');
+  const joinFields = $('#join-fields');
+  const createFields = $('#create-fields');
+  const btnAction = $('#btn-setup-action');
+  const btnBack = $('#btn-setup-back');
+  let currentMode = null; // 'create' | 'join'
+
   const roundsSpan = $('#rounds-count');
   const totalSpan = $('#total-count');
-  const humanSpan = $('#human-count');
-  const aiHint = $('#ai-hint');
   const hpHint = $('#hp-hint');
-  let rounds = 10, total = 2, human = 1;
+  let rounds = 10, total = 2;
 
-  function clampHuman(v) { return Math.max(0, Math.min(total, v)); }
-
-  function update() {
+  function updateSteppers() {
     roundsSpan.textContent = rounds;
     totalSpan.textContent = total;
-    human = clampHuman(human);
-    humanSpan.textContent = human;
-    aiHint.textContent = `其余 ${total - human} 人由 AI 操控`;
     hpHint.textContent = `初始 HP = ${rounds}`;
     $('#rounds-minus').disabled = rounds <= 3;
     $('#rounds-plus').disabled = rounds >= 20;
     $('#total-minus').disabled = total <= 2;
     $('#total-plus').disabled = total >= 6;
-    $('#human-minus').disabled = human <= 0;
-    $('#human-plus').disabled = human >= total;
   }
 
-  $('#rounds-minus').onclick = () => { if (rounds > 3) rounds--; update(); };
-  $('#rounds-plus').onclick = () => { if (rounds < 20) rounds++; update(); };
-  $('#total-minus').onclick = () => { if (total > 2) total--; update(); };
-  $('#total-plus').onclick = () => { if (total < 6) total++; update(); };
-  $('#human-minus').onclick = () => { human--; update(); };
-  $('#human-plus').onclick = () => { human++; update(); };
-  update();
+  $('#rounds-minus').onclick = () => { if (rounds > 3) rounds--; updateSteppers(); };
+  $('#rounds-plus').onclick = () => { if (rounds < 20) rounds++; updateSteppers(); };
+  $('#total-minus').onclick = () => { if (total > 2) total--; updateSteppers(); };
+  $('#total-plus').onclick = () => { if (total < 6) total++; updateSteppers(); };
+  updateSteppers();
 
-  // 创建房间
-  $('#btn-create-room').onclick = () => {
+  function showMode(mode) {
+    currentMode = mode;
+    modeSelect.classList.add('hidden');
+    setupForm.classList.remove('hidden');
+
+    if (mode === 'create') {
+      createFields.classList.remove('hidden');
+      joinFields.classList.add('hidden');
+      btnAction.textContent = '⚔️ 创建房间';
+    } else {
+      joinFields.classList.remove('hidden');
+      createFields.classList.add('hidden');
+      btnAction.textContent = '🚪 加入房间';
+    }
+  }
+
+  function showModeSelection() {
+    currentMode = null;
+    modeSelect.classList.remove('hidden');
+    setupForm.classList.add('hidden');
+  }
+
+  // 模式选择按钮
+  $('#btn-mode-create').onclick = () => showMode('create');
+  $('#btn-mode-join').onclick = () => showMode('join');
+
+  // 返回按钮
+  btnBack.onclick = () => showModeSelection();
+
+  // 执行按钮
+  btnAction.onclick = () => {
     if (!wsConnected) {
       showError('正在连接服务器，请稍候...');
       return;
     }
     const nameInput = $('#setup-player-name');
     myName = nameInput.value.trim() || `玩家${Math.floor(Math.random() * 100)}`;
-    ws.send(MSG.CREATE_ROOM, {
-      playerName: myName,
-      totalRounds: rounds,
-      maxPlayers: total,
-      humanCount: human,
-    });
-  };
 
-  // 加入房间
-  $('#btn-join-room').onclick = () => {
-    if (!wsConnected) {
-      showError('正在连接服务器，请稍候...');
-      return;
+    if (currentMode === 'create') {
+      ws.send(MSG.CREATE_ROOM, {
+        playerName: myName,
+        totalRounds: rounds,
+        maxPlayers: total,
+      });
+    } else {
+      const codeInput = $('#room-code-input');
+      const code = codeInput.value.trim();
+      if (!code || code.length !== 4) {
+        showError('请输入 4 位房间码');
+        return;
+      }
+      ws.send(MSG.JOIN_ROOM, { roomCode: code, playerName: myName });
     }
-    const nameInput = $('#setup-player-name');
-    const codeInput = $('#room-code-input');
-    myName = nameInput.value.trim() || `玩家${Math.floor(Math.random() * 100)}`;
-    const code = codeInput.value.trim();
-    if (!code || code.length !== 4) {
-      showError('请输入 4 位房间码');
-      return;
-    }
-    ws.send(MSG.JOIN_ROOM, { roomCode: code, playerName: myName });
   };
 }
 
@@ -944,8 +963,6 @@ let wsConnected = false;
 
 function updateConnectionUI() {
   const statusEl = $('#ws-status');
-  const btnCreate = $('#btn-create-room');
-  const btnJoin = $('#btn-join-room');
   if (statusEl) {
     if (wsConnected) {
       statusEl.textContent = '已连接';
@@ -955,8 +972,6 @@ function updateConnectionUI() {
       statusEl.style.color = 'var(--neon-orange)';
     }
   }
-  if (btnCreate) btnCreate.disabled = !wsConnected;
-  if (btnJoin) btnJoin.disabled = !wsConnected;
 }
 
 function setupWSHandlers() {
@@ -1005,9 +1020,12 @@ function setupWSHandlers() {
     showScreen(screenLobby);
     $('#lobby-room-code').textContent = roomCode;
     updateLobbyPlayers(payload.players);
-    if (isHost) $('#btn-start-game').classList.remove('hidden');
+    if (isHost) {
+      $('#btn-start-game').classList.remove('hidden');
+    } else {
+      $('#btn-start-game').classList.add('hidden');
+    }
     fetchPublicURL();
-    else $('#btn-start-game').classList.add('hidden');
   });
 
   ws.on(MSG.PLAYER_JOINED, (payload) => {
@@ -1135,7 +1153,7 @@ function updateRoundDisplay() {
 function updateLobbyGameSettings(settings) {
   const info = $('#lobby-game-info');
   if (info) {
-    info.textContent = `回合数: ${settings.totalRounds} | 玩家: ${settings.maxPlayers} | 真人: ${settings.humanCount}`;
+    info.textContent = `回合数: ${settings.totalRounds} | 总人数: ${settings.maxPlayers}`;
   }
 }
 
